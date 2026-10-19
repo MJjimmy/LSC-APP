@@ -1,6 +1,6 @@
 # LSC Android app
 
-Kotlin/XML Android client for the existing LSC PHP website. It uses a native welcome screen and a restricted WebView; it does not use Jetpack Compose or replace the PHP backend.
+Kotlin/XML Android client for the existing LSC PHP website.
 
 ## Source and backend
 
