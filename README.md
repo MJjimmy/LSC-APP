@@ -26,10 +26,13 @@ GitHub Actions runs the same unit-test and APK-build tasks on an Ubuntu runner. 
 - Native Welcome to LSC with direct Create account, Sign in and Help actions.
 - Existing PHP account, study-group, task, file, chat and profile/settings pages in the trusted WebView.
 - System-browser Google sign-in with private pending state and verifier checks.
+- Version 1.3 (versionCode 4): system document-picker support for photo/file inputs, including requested multiple selection. Only explicitly granted `content://` documents are accepted; no broad storage permission is requested.
+- Authenticated, direct same-origin HTTPS downloads: files are staged privately, then saved to a location chosen with Android's document picker. Cookie values remain private and are never forwarded to redirects.
+- Picker limits: up to 10 files and 100 MB combined; backend type and size validation still applies. Downloads reject redirects, HTML sign-in responses and files larger than 100 MB. Network and file reads run off the UI thread.
 - Connection failure/retry handling and Android Back navigation.
 
 ## Coursework evidence boundary
 
-A successful build and JVM tests do not prove every feature works on a physical phone. Registration/login, real Google return, settings persistence, collaboration features, invalid input and the narrated demonstration still need physical-device evidence. GitHub Actions does not replace the separately required Azure DevOps history, team records or lecturer feedback.
+A successful build and JVM tests do not prove every feature works on a physical phone. Registration/login, real Google return, settings persistence, collaboration features, invalid input and the narrated demonstration still need physical-device evidence. The new file picker, multipart uploads and authenticated downloads also need device testing. The project owner reports lecturer approval to use GitHub instead of Azure DevOps; keep that approval alongside the separately required team records and lecturer feedback.
 
 Do not commit `local.properties`, signing keys, provider secrets, passwords or generated build files. Do not expose those values in screenshots or the demonstration video.

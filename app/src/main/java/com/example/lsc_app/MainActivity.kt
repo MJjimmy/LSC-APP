@@ -30,6 +30,7 @@ import android.window.OnBackInvokedDispatcher
 /** Native entry experience; the existing PHP backend still owns accounts and data. */
 class MainActivity : Activity() {
     private lateinit var webView: WebView
+    private lateinit var fileActions: WebFileActions
     private lateinit var welcomeScreen: View
     private lateinit var appScreen: View
     private lateinit var pageError: View
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
         errorMessage = findViewById(R.id.pageErrorMessage)
         applySystemInsets()
         configureWebView()
+        fileActions.restoreState(savedInstanceState)
 
         findViewById<View>(R.id.createAccountButton).setOnClickListener { openAccountPage(true) }
         findViewById<View>(R.id.signInButton).setOnClickListener { openAccountPage(false) }
@@ -153,6 +155,11 @@ class MainActivity : Activity() {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(webView, false)
         }
+        fileActions = WebFileActions(this, webView)
+        webView.webChromeClient = fileActions.chromeClient
+        webView.setDownloadListener { url, _, disposition, mime, length ->
+            fileActions.download(url, disposition, mime, length)
+        }
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
@@ -184,6 +191,7 @@ class MainActivity : Activity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                fileActions.cancelUpload()
                 if (!showingWeb) return
                 if (AppRoutes.isLandingPage(url)) {
                     view.stopLoading()
@@ -241,6 +249,7 @@ class MainActivity : Activity() {
     }
 
     private fun showWelcome(animate: Boolean) {
+        fileActions.cancelUpload()
         showingWeb = false
         webView.stopLoading()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
@@ -289,6 +298,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() = navigateBack()
 
     override fun onSaveInstanceState(outState: Bundle) {
+        fileActions.saveState(outState)
         outState.putBoolean(STATE_WEB, showingWeb)
         outState.putString(STATE_PAGE, lastPage)
         if (showingWeb) webView.saveState(outState)
@@ -306,7 +316,14 @@ class MainActivity : Activity() {
         webView.onResume()
     }
 
+    @Deprecated("Platform document picker result for this Activity.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!fileActions.onActivityResult(requestCode, resultCode, data))
+            super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
+        fileActions.close(isChangingConfigurations)
         cancelWelcomeAnimation()
         webView.stopLoading()
         (webView.parent as? ViewGroup)?.removeView(webView)
