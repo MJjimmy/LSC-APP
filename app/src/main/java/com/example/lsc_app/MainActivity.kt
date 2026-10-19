@@ -52,6 +52,13 @@ class MainActivity : Activity() {
 
         findViewById<View>(R.id.createAccountButton).setOnClickListener { openAccountPage(true) }
         findViewById<View>(R.id.signInButton).setOnClickListener { openAccountPage(false) }
+        findViewById<View>(R.id.helpButton).setOnClickListener {
+            cancelWelcomeAnimation()
+            showApp()
+            resetHistoryOnFinish = true
+            lastPage = AppRoutes.helpUrl()
+            webView.loadUrl(lastPage)
+        }
         findViewById<View>(R.id.retryButton).setOnClickListener {
             pageError.visibility = View.GONE
             webView.loadUrl(lastPage)

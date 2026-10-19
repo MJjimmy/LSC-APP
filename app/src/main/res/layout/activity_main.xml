@@ -60,6 +60,12 @@
                     android:text="@string/lsc_sign_in" android:textColor="@color/lsc_cream"
                     android:textAllCaps="false" android:textSize="16sp" android:fontFamily="sans-serif-medium"
                     android:stateListAnimator="@null"/>
+                <Button android:id="@+id/helpButton" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:minHeight="48dp" android:layout_marginTop="12dp"
+                    android:background="@drawable/lsc_secondary_button" android:backgroundTint="@null"
+                    android:text="@string/lsc_help" android:textColor="@color/lsc_cream"
+                    android:textAllCaps="false" android:textSize="16sp" android:fontFamily="sans-serif-medium"
+                    android:stateListAnimator="@null"/>
             </LinearLayout>
             <TextView android:id="@+id/welcomeFooter" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="24dp" android:gravity="center" android:text="@string/lsc_welcome_footer"

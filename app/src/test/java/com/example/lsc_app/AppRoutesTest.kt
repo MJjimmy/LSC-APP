@@ -10,6 +10,13 @@ class AppRoutesTest {
     @Test fun existingAccountOpensSignInDirectly() {
         assertEquals("https://lsc.up.railway.app/login.php?app=android", AppRoutes.authUrl(false))
     }
+    @Test fun helpOpensSharedPageInAndroidMode() {
+        assertEquals("https://lsc.up.railway.app/help.php?app=android", AppRoutes.helpUrl())
+    }
+    @Test fun helpIsNotALandingPage() {
+        assertFalse(AppRoutes.isLandingPage("https://lsc.up.railway.app/help.php"))
+        assertFalse(AppRoutes.isLandingPage(AppRoutes.helpUrl()))
+    }
     @Test fun websiteLandingRoutesReturnToNativeWelcome() {
         assertTrue(AppRoutes.isLandingPage("https://lsc.up.railway.app/"))
         assertTrue(AppRoutes.isLandingPage("https://lsc.up.railway.app/index.php?logged_out=1"))

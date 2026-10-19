@@ -1,0 +1,71 @@
+name: Android build and tests
+
+on:
+  push:
+    branches: [master, main, ci/android-build]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build debug APK and run unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the runner's existing Java 25
+        shell: bash
+        run: |
+          test -n "$JAVA_HOME_25_X64"
+          test -x "$JAVA_HOME_25_X64/bin/java"
+          printf 'JAVA_HOME=%s\n' "$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+          printf '%s/bin\n' "$JAVA_HOME_25_X64" >> "$GITHUB_PATH"
+          "$JAVA_HOME_25_X64/bin/java" -version
+      - name: Verify the existing Gradle wrapper before execution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          jar = Path('gradle/wrapper/gradle-wrapper.jar')
+          expected = '76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3'
+          assert hashlib.sha256(jar.read_bytes()).hexdigest() == expected, 'Unexpected Gradle wrapper JAR'
+          properties = Path('gradle/wrapper/gradle-wrapper.properties').read_text()
+          assert 'distributionSha256Sum=bbaeb2fef8710818cf0e261201dab964c572f92b942812df0c3620d62a529a01' in properties
+          print('Official wrapper and pinned distribution checksum verified.')
+          PY
+      - name: Check the runner's existing Android SDK
+        shell: bash
+        run: |
+          test -d "$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list_installed
+      - name: Compile the app and execute unit tests
+        shell: bash
+        run: bash ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest :app:assembleDebug
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: LSC-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: LSC-unit-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/*.xml
+            app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
