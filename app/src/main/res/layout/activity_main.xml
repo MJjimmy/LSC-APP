@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/lsc_navy">
+
+    <ScrollView android:id="@+id/welcomeScreen" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:fillViewport="true" android:scrollbars="none"
+        android:background="@drawable/lsc_welcome_background">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="28dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:text="@string/lsc_brand"
+                android:textColor="@color/lsc_copper" android:textSize="10sp"
+                android:letterSpacing="0.16" android:fontFamily="sans-serif-medium"/>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
+                android:layout_weight="1" android:minHeight="308dp" android:gravity="center_vertical"
+                android:orientation="vertical" android:paddingTop="24dp" android:paddingBottom="24dp">
+                <ImageView android:id="@+id/welcomeLogo" android:layout_width="80dp" android:layout_height="80dp"
+                    android:layout_marginBottom="22dp" android:background="@drawable/lsc_logo_tile"
+                    android:src="@drawable/lsc_mark" android:padding="12dp" android:importantForAccessibility="no"/>
+                <LinearLayout android:id="@+id/welcomeCopy" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:orientation="vertical">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="@string/lsc_welcome" android:textColor="@color/lsc_cream" android:textSize="48sp"
+                        android:fontFamily="sans-serif-medium" android:lineSpacingExtra="0dp"
+                        android:includeFontPadding="false" android:accessibilityHeading="true"/>
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp" android:text="@string/lsc_intro"
+                        android:textColor="@color/lsc_muted" android:textSize="17sp" android:lineSpacingExtra="4dp"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/welcomeFeatures" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="26dp">
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                    android:background="@drawable/lsc_feature_chip" android:padding="10dp" android:gravity="center"
+                    android:text="@string/lsc_study_groups" android:textSize="11sp" android:textColor="@color/lsc_cream"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" android:layout_marginEnd="8dp" android:background="@drawable/lsc_feature_chip"
+                    android:padding="10dp" android:gravity="center" android:text="@string/lsc_shared_notes"
+                    android:textSize="11sp" android:textColor="@color/lsc_cream"/>
+                <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                    android:background="@drawable/lsc_feature_chip" android:padding="10dp" android:gravity="center"
+                    android:text="@string/lsc_stay_on_track" android:textSize="11sp" android:textColor="@color/lsc_cream"/>
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/welcomeActions" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical">
+                <Button android:id="@+id/createAccountButton" android:layout_width="match_parent"
+                    android:layout_height="56dp" android:background="@drawable/lsc_primary_button"
+                    android:backgroundTint="@null" android:text="@string/lsc_create_account"
+                    android:textColor="@color/lsc_navy" android:textAllCaps="false" android:textSize="16sp"
+                    android:fontFamily="sans-serif-medium" android:stateListAnimator="@null"/>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="17dp" android:layout_marginBottom="9dp" android:gravity="center"
+                    android:text="@string/lsc_already_member" android:textColor="@color/lsc_muted" android:textSize="12sp"/>
+                <Button android:id="@+id/signInButton" android:layout_width="match_parent" android:layout_height="56dp"
+                    android:background="@drawable/lsc_secondary_button" android:backgroundTint="@null"
+                    android:text="@string/lsc_sign_in" android:textColor="@color/lsc_cream"
+                    android:textAllCaps="false" android:textSize="16sp" android:fontFamily="sans-serif-medium"
+                    android:stateListAnimator="@null"/>
+            </LinearLayout>
+            <TextView android:id="@+id/welcomeFooter" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" android:gravity="center" android:text="@string/lsc_welcome_footer"
+                android:textColor="@color/lsc_muted" android:textSize="11sp"/>
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout android:id="@+id/appScreen" android:layout_width="match_parent"
+        android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone"
+        android:background="#FFFFFF">
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+            <WebView android:id="@+id/lscWebView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+            <LinearLayout android:id="@+id/pageError" android:layout_width="match_parent" android:layout_height="match_parent"
+                android:orientation="vertical" android:gravity="center" android:padding="32dp"
+                android:background="#FFFFFF" android:visibility="gone">
+                <ImageView android:layout_width="64dp" android:layout_height="64dp" android:background="@drawable/lsc_logo_tile"
+                    android:src="@drawable/lsc_mark" android:padding="8dp" android:importantForAccessibility="no"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp"
+                    android:text="@string/lsc_connection_title" android:textSize="23sp" android:textColor="@color/lsc_navy"
+                    android:fontFamily="sans-serif-medium"/>
+                <TextView android:id="@+id/pageErrorMessage" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:gravity="center" android:text="@string/lsc_connection_message"
+                    android:textColor="#526477" android:textSize="15sp"/>
+                <Button android:id="@+id/retryButton" android:layout_width="match_parent" android:layout_height="56dp"
+                    android:layout_marginTop="26dp" android:background="@drawable/lsc_primary_button" android:backgroundTint="@null"
+                    android:text="@string/lsc_retry" android:textAllCaps="false" android:textColor="@color/lsc_navy"/>
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources><style name="Theme.LSC.Native" parent="Base.LSC.Native"><item name="android:windowSplashScreenBackground">@color/lsc_navy</item><item name="android:windowSplashScreenAnimatedIcon">@drawable/lsc_mark</item><item name="android:windowSplashScreenAnimationDuration">300</item></style></resources>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="lsc_navy">#102137</color>
+    <color name="lsc_cream">#F8F4EA</color>
+    <color name="lsc_muted">#BED0D4</color>
+    <color name="lsc_copper">#E7B77A</color>
+    <style name="Base.LSC.Native" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/lsc_navy</item>
+        <item name="android:statusBarColor">@color/lsc_navy</item>
+        <item name="android:navigationBarColor">@color/lsc_navy</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/lsc_copper</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="Theme.LSC.Native" parent="Base.LSC.Native"/>
+    <string name="lsc_brand">LEARN · SHARE · COLLABORATE</string>
+    <string name="lsc_welcome">Welcome\nto LSC</string>
+    <string name="lsc_intro">Your people. Your notes.\nYour next breakthrough.</string>
+    <string name="lsc_create_account">Create an account</string>
+    <string name="lsc_sign_in">Sign in</string>
+    <string name="lsc_already_member">Already part of LSC?</string>
+    <string name="lsc_welcome_footer">A little focus. A lot of possibility.</string>
+    <string name="lsc_study_groups">Study groups</string>
+    <string name="lsc_shared_notes">Shared notes</string>
+    <string name="lsc_stay_on_track">Stay on track</string>
+    <string name="lsc_back">Go back</string>
+    <string name="lsc_welcome_action">Welcome</string>
+    <string name="lsc_loading">Opening your study space…</string>
+    <string name="lsc_connection_title">Let us reconnect</string>
+    <string name="lsc_connection_message">Check your internet connection, then try again.</string>
+    <string name="lsc_tls_message">A secure connection could not be established. Please try again later.</string>
+    <string name="lsc_retry">Try again</string>
+    <string name="lsc_browser_missing">No browser is available.</string>
+    <string name="lsc_workspace">Your study space</string>
+    <string name="lsc_tasks">My tasks</string>
+    <string name="lsc_messages">Messages</string>
+    <string name="lsc_files">My files</string>
+    <string name="lsc_settings">Settings</string>
+    <string name="lsc_profile">Profile</string>
+    <string name="lsc_reset_password">Reset password</string>
+</resources>
