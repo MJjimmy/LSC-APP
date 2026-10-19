@@ -5,7 +5,7 @@ Kotlin/XML Android client for the existing LSC PHP website.
 ## Source and backend
 
 - Working application source: `master` (the repository default branch).
-- Android application ID: `com.example.lsc_app`.
+- Android application ID: `lsc_app`.
 - Backend: `https://lsc.up.railway.app`.
 - Google sign-in opens the system browser and returns through a state/verifier-bound, one-time session exchange. Google and email-provider credentials stay on the server.
 
