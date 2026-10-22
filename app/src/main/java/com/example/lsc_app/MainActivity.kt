@@ -190,8 +190,30 @@ class MainActivity : Activity() {
                 return true
             }
 
+            // Unlike shouldOverrideUrlLoading, this also checks form POST requests.
+            // Android intercepts the initial resource URL, not every redirect destination;
+            // actual document starts/commits below provide an independent fail-closed guard.
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                if (WebRequestPolicy.isRequestAllowed(request.url.toString(), request.isForMainFrame, request.method)) null
+                else WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(),
+                    java.io.ByteArrayInputStream(ByteArray(0)))
+
+            override fun onPageCommitVisible(view: WebView, url: String) {
+                if (!WebRequestPolicy.isMainFrameAllowed(url)) {
+                    view.visibility = View.INVISIBLE
+                    view.stopLoading()
+                    showPageError(R.string.lsc_connection_message)
+                } else if (!loadFailed) view.visibility = View.VISIBLE
+            }
+
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 fileActions.cancelUpload()
+                if (!WebRequestPolicy.isMainFrameAllowed(url)) {
+                    view.visibility = View.INVISIBLE
+                    view.stopLoading()
+                    showPageError(R.string.lsc_connection_message)
+                    return
+                }
                 if (!showingWeb) return
                 if (AppRoutes.isLandingPage(url)) {
                     view.stopLoading()
@@ -228,9 +250,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun isTrusted(uri: Uri): Boolean =
-        uri.scheme.equals("https", true) && uri.host.equals("lsc.up.railway.app", true) &&
-            uri.userInfo == null && (uri.port == -1 || uri.port == 443)
+    private fun isTrusted(uri: Uri): Boolean = WebRequestPolicy.isMainFrameAllowed(uri.toString())
 
     private fun openAccountPage(register: Boolean) {
         cancelWelcomeAnimation()
