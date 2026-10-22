@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var errorMessage: TextView
     private var showingWeb = false
     private var loadFailed = false
+    private var restoringInitialPage = false
     private var resetHistoryOnFinish = false
     private var lastPage = AppRoutes.authUrl(false)
 
@@ -75,7 +76,11 @@ class MainActivity : Activity() {
         if (savedInstanceState?.getBoolean(STATE_WEB) == true) {
             showApp()
             lastPage = savedInstanceState.getString(STATE_PAGE) ?: AppRoutes.authUrl(false)
-            if (webView.restoreState(savedInstanceState) == null) webView.loadUrl(lastPage)
+            restoringInitialPage = true
+            if (webView.restoreState(savedInstanceState) == null) {
+                restoringInitialPage = false
+                webView.loadUrl(lastPage)
+            }
         } else {
             // No website/index request is needed to display this screen, even offline.
             showWelcome(savedInstanceState == null)
@@ -89,6 +94,7 @@ class MainActivity : Activity() {
     }
 
     private fun beginGoogleSignIn() {
+        fileActions.cancelForAccountBoundary()
         val pending = AppAuthFlow.create(System.currentTimeMillis())
         val prefs = getSharedPreferences("lsc_pending_google", MODE_PRIVATE)
         prefs.edit().putString("state", pending.state).putString("verifier", pending.verifier)
@@ -113,6 +119,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Sign-in expired or was not started in LSC. Please try again.", Toast.LENGTH_LONG).show()
             return false
         }
+        fileActions.cancelForAccountBoundary()
         // Consume locally before posting; duplicate return intents must not replay a login.
         prefs.edit().clear().apply()
         intent.data = null
@@ -155,7 +162,8 @@ class MainActivity : Activity() {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(webView, false)
         }
-        fileActions = WebFileActions(this, webView)
+        fileActions = WebFileActions(this, webView,
+            lastNonConfigurationInstance as? DownloadSession ?: DownloadSession(cacheDir))
         webView.webChromeClient = fileActions.chromeClient
         webView.setDownloadListener { url, _, disposition, mime, length ->
             fileActions.download(url, disposition, mime, length)
@@ -207,8 +215,11 @@ class MainActivity : Activity() {
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                fileActions.cancelUpload()
-                if (!WebRequestPolicy.isMainFrameAllowed(url)) {
+                // Hide the preceding document until a trusted main-frame commit is visible.
+                view.visibility = View.INVISIBLE
+                if (!restoringInitialPage || url != lastPage) fileActions.cancelForAccountBoundary()
+                restoringInitialPage = false
+                if (!WebRequestPolicy.isMainFrameAllowed(url))
                     view.visibility = View.INVISIBLE
                     view.stopLoading()
                     showPageError(R.string.lsc_connection_message)
@@ -226,7 +237,15 @@ class MainActivity : Activity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if (!WebRequestPolicy.isMainFrameAllowed(url)) {
+                    view.visibility = View.INVISIBLE
+                    view.stopLoading()
+                    showPageError(R.string.lsc_connection_message)
+                    return
+                }
+                fileActions.checkSessionCookie()
                 if (!showingWeb || AppRoutes.isLandingPage(url)) return
+                if (!loadFailed && view.url == url) view.visibility = View.VISIBLE
                 if (resetHistoryOnFinish && !loadFailed && view.url == url) {
                     // Do not navigate back into a previous account screen or the website index.
                     view.clearHistory()
@@ -253,6 +272,7 @@ class MainActivity : Activity() {
     private fun isTrusted(uri: Uri): Boolean = WebRequestPolicy.isMainFrameAllowed(uri.toString())
 
     private fun openAccountPage(register: Boolean) {
+        fileActions.cancelForAccountBoundary()
         cancelWelcomeAnimation()
         showApp()
         resetHistoryOnFinish = true
@@ -269,7 +289,7 @@ class MainActivity : Activity() {
     }
 
     private fun showWelcome(animate: Boolean) {
-        fileActions.cancelUpload()
+        fileActions.cancelForAccountBoundary()
         showingWeb = false
         webView.stopLoading()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
@@ -334,6 +354,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         webView.onResume()
+        fileActions.checkSessionCookie()
     }
 
     @Deprecated("Platform document picker result for this Activity.")
@@ -341,6 +362,8 @@ class MainActivity : Activity() {
         if (!fileActions.onActivityResult(requestCode, resultCode, data))
             super.onActivityResult(requestCode, resultCode, data)
     }
+
+    override fun onRetainNonConfigurationInstance(): Any = fileActions.retainedDownloadSession()
 
     override fun onDestroy() {
         fileActions.close(isChangingConfigurations)
