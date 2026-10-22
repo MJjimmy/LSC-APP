@@ -18,6 +18,29 @@ class StageRetentionTest {
         } finally { cache.deleteRecursively() }
     }
 
+    @Test fun cleanupExpiresOnlyOwnedDirectChildrenAndExemptsAnActiveStage() {
+        val cache = Files.createTempDirectory("lsc-cleanup-test").toFile()
+        val outside = Files.createTempFile("lsc-download-outside", ".part").toFile()
+        try {
+            val old = java.io.File(cache, "lsc-download-old.part").apply { writeText("synthetic") }
+            val active = java.io.File(cache, "lsc-download-active.part").apply { writeText("synthetic") }
+            val fresh = java.io.File(cache, "lsc-download-fresh.part").apply { writeText("synthetic") }
+            val other = java.io.File(cache, "not-a-stage.part").apply { writeText("keep") }
+            val directory = java.io.File(cache, "lsc-download-dir.part").apply { mkdir() }
+            val now = System.currentTimeMillis()
+            assertTrue(old.setLastModified(now - 2 * 60 * 60 * 1000L))
+            assertTrue(active.setLastModified(now - 2 * 60 * 60 * 1000L))
+            assertEquals(1, FileActionPolicy.reconcileDownloadStages(cache, active.name, nowMs = now))
+            assertFalse(old.exists())
+            assertTrue(active.exists())
+            assertTrue(fresh.exists())
+            assertEquals(2, FileActionPolicy.reconcileDownloadStages(cache, all = true))
+            assertTrue(other.exists())
+            assertTrue(directory.exists())
+            assertTrue(outside.exists())
+        } finally { cache.deleteRecursively(); outside.delete() }
+    }
+
     @Test fun cancelDuringReadDoesNotWriteTheReturnedBytes() {
         var canceled = false
         val input = object : ByteArrayInputStream(ByteArray(8)) {

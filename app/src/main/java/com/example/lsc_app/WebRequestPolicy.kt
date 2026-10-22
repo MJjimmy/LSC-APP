@@ -10,8 +10,19 @@ internal object WebRequestPolicy {
             it.rawUserInfo == null && (it.port == -1 || it.port == 443) }
     }
 
+    private val trustedHosts = setOf("lsc.up.railway.app", "lsc.jkskinetics.co.za")
+
     fun isMainFrameAllowed(url: String): Boolean =
-        httpsUri(url)?.host.equals("lsc.up.railway.app", true)
+        httpsUri(url)?.host?.lowercase(java.util.Locale.ROOT) in trustedHosts
+
+    /** Normalize only explicitly trusted HTTPS authorities; ports -1 and 443 are identical. */
+    fun origin(url: String): String? {
+        if (!isMainFrameAllowed(url)) return null
+        return "https://" + httpsUri(url)!!.host.lowercase(java.util.Locale.ROOT)
+    }
+
+    fun sameOrigin(first: String, second: String): Boolean =
+        origin(first)?.let { it == origin(second) } == true
 
     fun isRequestAllowed(url: String, mainFrame: Boolean, method: String): Boolean {
         if (isMainFrameAllowed(url)) return true // Includes trusted form POSTs and fragments.

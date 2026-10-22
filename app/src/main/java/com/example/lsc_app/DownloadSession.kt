@@ -32,7 +32,7 @@ internal class DownloadSession(private val cacheDir: File) {
 
     @Synchronized fun discard(file: File) {
         // Accept only direct-child private stage files; destinations never enter this set.
-        val owned = FileActionPolicy.restoreDownloadStage(cacheDir, file.name)
+        val owned = FileActionPolicy.ownedDownloadStage(cacheDir, file.name)
         if (owned == file.canonicalFile) {
             stages.remove(owned)
             owned.delete()

@@ -45,6 +45,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
         cancelUpload()
         val hadDownload = downloadBusy
         downloadSession.cancel()
+        FileActionPolicy.reconcileDownloadStages(activity.cacheDir, all = true)
         downloadBusy = false
         downloadFile = null
         savedDownloadName = null
@@ -58,7 +59,11 @@ internal class WebFileActions(private val activity: Activity, private val webVie
         if (downloadBusy && !downloadSession.matchesCookie(currentSessionCookie())) cancelForAccountBoundary()
     }
 
-    private fun currentSessionCookie(): String? = CookieManager.getInstance().getCookie(AppRoutes.BASE_URL + "/")
+    private fun currentSessionCookie(): String? {
+        val origin = WebRequestPolicy.origin(webView.url.orEmpty()) ?: return null
+        // Origin and cookies stay in process memory; neither is logged or saved in Bundle.
+        return origin + " " + CookieManager.getInstance().getCookie(origin + "/").orEmpty()
+    }
 
     fun saveState(state: Bundle) {
         // No cookies, URLs, grants or provider URIs are saved by this feature.
@@ -69,13 +74,15 @@ internal class WebFileActions(private val activity: Activity, private val webVie
     }
 
     fun restoreState(state: Bundle?) {
+        FileActionPolicy.reconcileDownloadStages(activity.cacheDir)
         downloadPickerOpen = state?.getBoolean(STATE_DOWNLOAD_PICKER_OPEN) == true
         if (state?.getBoolean(STATE_DOWNLOAD_PENDING) != true) return
         val restored = FileActionPolicy.restoreDownloadStage(activity.cacheDir,
             state.getString(STATE_DOWNLOAD_NAME))
         // Only the retained, in-memory lease can authorize a stage after rotation.
         // Process death does not restore account/cookie authority from Bundle data.
-        downloadFile = restored?.takeIf { downloadSession.owns(it) && downloadSession.matchesCookie(currentSessionCookie()) }
+        downloadFile = restored?.takeIf { downloadSession.owns(it) }
+        // Cookie/origin is rechecked on resume after WebView.restoreState has restored its URL.
         if (downloadFile == null) restored?.let { downloadSession.discard(it) }
         downloadBusy = downloadFile != null
         if (!downloadBusy) message("Download canceled: the temporary file is unavailable. Please download again.")
@@ -245,7 +252,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
             return
         }
         if (!FileActionPolicy.isTrusted(webView.url.orEmpty()) || !FileActionPolicy.isTrusted(url) ||
-            length > FileActionPolicy.MAX_BYTES) {
+            !WebRequestPolicy.sameOrigin(webView.url.orEmpty(), url) || length > FileActionPolicy.MAX_BYTES) {
             message("Only LSC HTTPS downloads up to 100 MB are supported.")
             return
         }

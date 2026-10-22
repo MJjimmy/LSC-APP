@@ -2,16 +2,32 @@ package com.example.lsc_app
 
 internal object FileActionPolicy {
     const val MAX_BYTES = 100L * 1024 * 1024
-    /** Saved state may name only an owned stage directly inside this private cache. */
-    fun restoreDownloadStage(cacheDir: java.io.File, basename: String?): java.io.File? {
+    const val DOWNLOAD_STAGE_TTL_MS = 60L * 60 * 1000
+
+    /** Cleanup may touch only an owned direct child, never a link/dir or user document. */
+    fun ownedDownloadStage(cacheDir: java.io.File, basename: String?): java.io.File? {
         if (basename == null || !basename.matches(Regex("lsc-download-[A-Za-z0-9_-]+\\.part"))) return null
         return runCatching {
             val cache = cacheDir.canonicalFile
             val file = java.io.File(cache, basename).canonicalFile
-            file.takeIf { it.parentFile == cache && it.name == basename && it.isFile &&
-                it.length() <= MAX_BYTES }
+            file.takeIf { it.parentFile == cache && it.name == basename && it.isFile }
         }.getOrNull()
     }
+
+    /** A basename does not authorize an expired/process-death stage. */
+    fun restoreDownloadStage(cacheDir: java.io.File, basename: String?): java.io.File? =
+        ownedDownloadStage(cacheDir, basename)?.takeIf {
+            it.length() <= MAX_BYTES && System.currentTimeMillis() - it.lastModified() in 0..DOWNLOAD_STAGE_TTL_MS
+        }
+
+    /** Opportunistic retention bound, not a background timer. Account changes remove all owned stages. */
+    fun reconcileDownloadStages(cacheDir: java.io.File, activeName: String? = null,
+                                all: Boolean = false, nowMs: Long = System.currentTimeMillis()): Int =
+        (cacheDir.listFiles() ?: emptyArray()).count { candidate ->
+            val owned = ownedDownloadStage(cacheDir, candidate.name)
+            owned != null && owned.name != activeName &&
+                (all || nowMs - owned.lastModified() !in 0..DOWNLOAD_STAGE_TTL_MS) && owned.delete()
+        }
 
     fun safeFilename(name: String): String = name.replace('\\', '/').substringAfterLast('/')
         .map { if (it.isISOControl() || Character.getType(it) == Character.FORMAT.toInt() || it in ":*?\"<>|") '_' else it }
@@ -50,6 +66,7 @@ internal object FileActionPolicy {
         while (true) {
             if (canceled() || Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
             val count = input.read(buffer)
+            if (canceled() || Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException()
             if (count == -1) return total
             total += count
             if (total > limit) throw java.io.IOException("File exceeds limit")
@@ -58,8 +75,6 @@ internal object FileActionPolicy {
     }
     fun isTrusted(url: String): Boolean {
         val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
-        return uri.scheme.equals("https", true) &&
-            uri.host.equals("lsc.up.railway.app", true) && uri.rawUserInfo == null &&
-            (uri.port == -1 || uri.port == 443) && uri.rawFragment == null
+        return WebRequestPolicy.isMainFrameAllowed(url) && uri.rawFragment == null
     }
 }
