@@ -2,7 +2,7 @@ name: Android build and tests
 
 on:
   push:
-    branches: [master, main, ci/android-build]
+    branches: [master, main, ci/android-build, security/android-2026-10-22]
   pull_request:
   workflow_dispatch:
 
@@ -38,10 +38,12 @@ jobs:
           import hashlib
           from pathlib import Path
           jar = Path('gradle/wrapper/gradle-wrapper.jar')
-          expected = '76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3'
+          expected = '3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98'
           assert hashlib.sha256(jar.read_bytes()).hexdigest() == expected, 'Unexpected Gradle wrapper JAR'
           properties = Path('gradle/wrapper/gradle-wrapper.properties').read_text()
-          assert 'distributionSha256Sum=bbaeb2fef8710818cf0e261201dab964c572f92b942812df0c3620d62a529a01' in properties
+          assert 'distributionSha256Sum=dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f' in properties
+          assert 'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.1-bin.zip' in properties
+          assert 'validateDistributionUrl=true' in properties
           print('Official wrapper and pinned distribution checksum verified.')
           PY
       - name: Check the runner's existing Android SDK
