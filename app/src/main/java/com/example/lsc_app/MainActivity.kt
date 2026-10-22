@@ -219,7 +219,7 @@ class MainActivity : Activity() {
                 view.visibility = View.INVISIBLE
                 if (!restoringInitialPage || url != lastPage) fileActions.cancelForAccountBoundary()
                 restoringInitialPage = false
-                if (!WebRequestPolicy.isMainFrameAllowed(url))
+                if (!WebRequestPolicy.isMainFrameAllowed(url)) {
                     view.visibility = View.INVISIBLE
                     view.stopLoading()
                     showPageError(R.string.lsc_connection_message)

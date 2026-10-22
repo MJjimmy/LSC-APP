@@ -303,7 +303,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                         downloadFile = file
                         try {
                             downloadPickerOpen = true
-                            activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT)
+                            activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = saveType
                                 putExtra(Intent.EXTRA_TITLE, filename)
