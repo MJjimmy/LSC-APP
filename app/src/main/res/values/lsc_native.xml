@@ -1,20 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="lsc_navy">#102137</color>
+    <color name="lsc_legacy_navigation_bar">#102137</color>
     <color name="lsc_cream">#F8F4EA</color>
     <color name="lsc_muted">#BED0D4</color>
     <color name="lsc_copper">#E7B77A</color>
-    <style name="Base.LSC.Native" parent="android:style/Theme.Material.Light.NoActionBar">
+    <color name="lsc_surface">#F7F9FC</color>
+    <color name="lsc_on_surface">#102137</color>
+    <color name="lsc_on_surface_muted">#4D6073</color>
+    <color name="lsc_outline">#CBD5E1</color>
+    <color name="lsc_toolbar">#F7F9FC</color>
+    <color name="lsc_on_toolbar">#102137</color>
+    <color name="lsc_on_accent">#102137</color>
+    <color name="lsc_progress">#8A4B16</color>
+    <style name="Base.LSC.Platform" parent="android:style/Theme.Material.Light.NoActionBar"/>
+    <style name="Base.LSC.Native" parent="Base.LSC.Platform">
+        <item name="android:isLightTheme">true</item>
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowBackground">@color/lsc_navy</item>
-        <item name="android:statusBarColor">@color/lsc_navy</item>
-        <item name="android:navigationBarColor">@color/lsc_navy</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:colorAccent">@color/lsc_copper</item>
+        <item name="android:windowBackground">@color/lsc_surface</item>
+        <item name="android:statusBarColor">@color/lsc_surface</item>
+        <item name="android:navigationBarColor">@color/lsc_legacy_navigation_bar</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">@color/lsc_progress</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
     <style name="Theme.LSC.Native" parent="Base.LSC.Native"/>
-    <string name="lsc_brand">LEARN · SHARE · COLLABORATE</string>
+    <style name="Theme.LSC.Launch" parent="Base.LSC.Native">
+        <item name="android:windowBackground">@drawable/lsc_launch_background</item>
+    </style>
+    <string name="lsc_brand">LEARN · SHARE · CONNECT</string>
     <string name="lsc_welcome">Welcome\nto LSC</string>
     <string name="lsc_intro">Your people. Your notes.\nYour next breakthrough.</string>
     <string name="lsc_create_account">Create an account</string>

@@ -1,6 +1,8 @@
 package com.example.lsc_app
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -38,11 +40,20 @@ internal class WebFileActions(private val activity: Activity, private val webVie
     private var savedDownloadName: String? = null
     private var downloadPickerOpen = false
 
+    var onOperationStatus: ((String?) -> Unit)? = null
+
+    private var uploadStatus: String? = null
+    private var downloadStatus: String? = null
+    private var completedDownloadDialog: AlertDialog? = null
+
     fun retainedDownloadSession(): DownloadSession = downloadSession
 
     /** Conservative boundary: every real document navigation, welcome, or auth entry revokes exports. */
     fun cancelForAccountBoundary() {
         cancelUpload()
+        completedDownloadDialog?.dismiss()
+        completedDownloadDialog = null
+        operationStatus(null)
         val hadDownload = downloadBusy
         downloadSession.cancel()
         FileActionPolicy.reconcileDownloadStages(activity.cacheDir, all = true)
@@ -85,6 +96,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
         // Cookie/origin is rechecked on resume after WebView.restoreState has restored its URL.
         if (downloadFile == null) restored?.let { downloadSession.discard(it) }
         downloadBusy = downloadFile != null
+        if (downloadBusy) operationStatus("Choose a save location for your document…")
         if (!downloadBusy) message("Download canceled: the temporary file is unavailable. Please download again.")
     }
 
@@ -121,6 +133,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
             }
             try {
                 uploadPickerOpen = true
+                operationStatus(if (uploadMultiple) "Choose up to 10 files…" else "Choose a file…", upload = true)
                 activity.startActivityForResult(picker, REQUEST_UPLOAD)
             } catch (_: RuntimeException) {
                 uploadPickerOpen = false
@@ -133,6 +146,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
 
     fun cancelUpload() {
         uploadGeneration++
+        operationStatus(null, upload = true)
         val callback = uploadCallback
         uploadCallback = null
         uploadPage = null
@@ -165,6 +179,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
             }
             val generation = uploadGeneration
             val types = uploadTypes.toList()
+            operationStatus("Checking selected files…", upload = true)
             worker.execute {
                 val valid = runCatching {
                     var remaining = FileActionPolicy.MAX_BYTES
@@ -184,6 +199,8 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                             val callback = uploadCallback
                             uploadCallback = null
                             uploadPage = null
+                            operationStatus(null, upload = true)
+                            message("Files selected. Use the page's upload action to submit them.")
                             callback?.onReceiveValue(selected.toTypedArray())
                         } else {
                             cancelUpload()
@@ -206,6 +223,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
             savedDownloadName = null
             if (file == null) {
                 downloadBusy = false
+                operationStatus(null)
                 staged?.let { worker.execute { downloadSession.discard(it) } }
                 message("Download canceled: the temporary file is unavailable. Please download again. Nothing was saved.")
                 return true
@@ -213,16 +231,21 @@ internal class WebFileActions(private val activity: Activity, private val webVie
             val uri = data?.data
             if (result != Activity.RESULT_OK || uri == null) {
                 downloadBusy = false
+                operationStatus(null)
                 worker.execute { downloadSession.discard(file) }
                 return true
             }
             if (data.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION == 0 ||
                 !hasGrant(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)) {
                 downloadBusy = false
+                operationStatus(null)
                 worker.execute { downloadSession.discard(file) }
                 message("Save location did not grant write access.")
                 return true
             }
+            val canRead = data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0 &&
+                hasGrant(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            operationStatus("Saving document…")
             worker.execute {
                 val saved = runCatching {
                     if (closed || !downloadSession.isCurrent(generation)) throw IOException("Canceled")
@@ -233,11 +256,15 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                     } ?: throw IOException("Cannot write destination")
                 }.isSuccess
                 downloadSession.discard(file) // Never delete the user-chosen destination.
+                // Provider metadata can perform I/O, so resolve it on this worker too.
+                val savedMime = if (saved) runCatching { activity.contentResolver.getType(uri) }.getOrNull() else null
                 main.post {
                     if (downloadSession.isCurrent(generation)) {
                         downloadBusy = false
+                        operationStatus(null)
                         message(if (saved && !closed) "Download saved." else
                             "Could not save download. The selected destination may contain an incomplete file.")
+                        if (saved && !closed && canRead) offerSavedDocument(uri, savedMime, generation)
                     }
                 }
             }
@@ -262,6 +289,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
         val filename = FileActionPolicy.safeFilename(URLUtil.guessFileName(url, disposition, mime))
         val generation = downloadSession.begin(currentSessionCookie())
         downloadBusy = true
+        operationStatus("Downloading…")
         message("Downloading… Choose a save location when ready.")
         worker.execute {
             var temporary: File? = null
@@ -310,16 +338,18 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                         downloadFile = file
                         try {
                             downloadPickerOpen = true
+                            operationStatus("Choose a save location…")
                             activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = saveType
                                 putExtra(Intent.EXTRA_TITLE, filename)
-                                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                             }, REQUEST_DOWNLOAD)
                         } catch (_: RuntimeException) {
                             downloadPickerOpen = false
                             downloadFile = null
                             downloadBusy = false
+                            operationStatus(null)
                             worker.execute { downloadSession.discard(file) }
                             message("No save picker available.")
                         }
@@ -331,6 +361,7 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                 main.post {
                     if (downloadSession.isCurrent(generation)) {
                         downloadBusy = false
+                        operationStatus(null)
                         message("Download failed. Check your connection and sign in again if needed. Redirects, HTML and files over 100 MB are refused.")
                     }
                 }
@@ -339,6 +370,41 @@ internal class WebFileActions(private val activity: Activity, private val webVie
                 connection = null
             }
         }
+    }
+
+    private fun operationStatus(text: String?, upload: Boolean = false) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            main.post { if (!closed) operationStatus(text, upload) }
+            return
+        }
+        if (upload) uploadStatus = text else downloadStatus = text
+        onOperationStatus?.invoke(if (closed) null else uploadStatus ?: downloadStatus)
+    }
+
+    private fun offerSavedDocument(uri: Uri, mime: String?, generation: Long) {
+        if (closed || activity.isFinishing || activity.isDestroyed ||
+            !downloadSession.isCurrent(generation) || !downloadSession.matchesCookie(currentSessionCookie()) ||
+            !hasGrant(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)) return
+        val safeMime = mime?.takeIf { FileActionPolicy.acceptTypes(arrayOf(it)) == listOf(it) }
+            ?: "application/octet-stream"
+        fun launch(share: Boolean) {
+            if (closed || !downloadSession.isCurrent(generation) ||
+                !downloadSession.matchesCookie(currentSessionCookie())) return
+            val intent = Intent(if (share) Intent.ACTION_SEND else Intent.ACTION_VIEW).apply {
+                if (share) { type = safeMime; putExtra(Intent.EXTRA_STREAM, uri) }
+                else setDataAndType(uri, safeMime)
+                clipData = ClipData.newRawUri("LSC document", uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try { activity.startActivity(Intent.createChooser(intent, if (share) "Share document" else "Open document")) }
+            catch (_: RuntimeException) { message("No compatible app is available for this document.") }
+        }
+        completedDownloadDialog?.dismiss()
+        completedDownloadDialog = AlertDialog.Builder(activity).setTitle("Document saved")
+            .setMessage("Open your saved document or share a copy with an app you choose.")
+            .setPositiveButton("Open") { _, _ -> launch(false) }
+            .setNeutralButton("Share") { _, _ -> launch(true) }
+            .setNegativeButton("Done", null).show()
     }
 
     private fun uploadStillTrusted(): Boolean = webView.url == uploadPage &&
@@ -356,6 +422,9 @@ internal class WebFileActions(private val activity: Activity, private val webVie
     fun close(changingConfigurations: Boolean) {
         closed = true
         cancelUpload()
+        operationStatus(null)
+        completedDownloadDialog?.dismiss()
+        completedDownloadDialog = null
         val activeConnection = connection
         Thread { activeConnection?.disconnect() }.start()
         // Preserve only a completed stage already handed to saved state, and only

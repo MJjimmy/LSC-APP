@@ -5,7 +5,7 @@ Kotlin/XML Android client for the existing LSC PHP website.
 ## Source and backend
 
 - Working application source: `master` (the repository default branch).
-- Android application ID: `lsc_app`.
+- Android application ID: `com.example.lsc_app` (the existing installed package, unchanged).
 - Backend: `https://lsc.up.railway.app`.
 - Google sign-in opens the system browser and returns through a state/verifier-bound, one-time session exchange. Google and email-provider credentials stay on the server.
 
@@ -30,6 +30,19 @@ GitHub Actions runs the same unit-test and APK-build tasks on an Ubuntu runner. 
 - Authenticated, direct same-origin HTTPS downloads: files are staged privately, then saved to a location chosen with Android's document picker. Cookie values remain private and are never forwarded to redirects.
 - Picker limits: up to 10 files and 100 MB combined; backend type and size validation still applies. Downloads reject redirects, HTML sign-in responses and files larger than 100 MB. Network and file reads run off the UI thread.
 - Connection failure/retry handling and Android Back navigation.
+
+## UI fix (version 1.4.2, versionCode 7; branch `ui-fix`)
+
+- Local LSC adaptive/themed launcher icons and an OS launch screen without an artificial delay; static launch-window fallback before Android 12.
+- Light-only native Welcome, workspace/error surfaces, dialogs, launch screen and trusted WebView. Night-qualified dark overrides and WebView algorithmic darkening are disabled, without injected CSS/JavaScript or new dependencies. Status/navigation bars use light surfaces and dark icons where supported; API 24/25 keep a fixed navy navigation-bar contrast fallback because dark navigation icons require API 26. Navy/copper remain brand accents.
+- No native top loading line or reserved strip. Exact-document refresh retention, accessible error screen, Retry and Return to Welcome remain. Retry never replays a one-time Google exchange as a GET.
+- No extra native top toolbar or duplicate bottom tabs. Existing website navigation and safe Android Back handling remain.
+- Pure, tested URL/history/invitation policy. Back skips one-shot auth/logout/download pages and cross-account authentication history.
+- Indeterminate picker/validation/download/save feedback, no invented upload percentages or server-success claims. Completed user-saved documents offer Open/Share using read-granted content URIs; no raw private file paths or broad storage permissions.
+- Validated HTTPS `/invite.php?token=<64 lowercase hex characters>` entry and native long-press sharing of actual invitation anchors rendered on workspace pages. Backend recipient/expiry/CSRF checks remain authoritative.
+- Existing Google repeated-tap/cancel-return fix retained: one pending browser handoff; an unfinished return clears it and reveals Welcome.
+
+See [implementation boundaries and the physical-device checklist](docs/ANDROID-POLISH.md). The debug build is not proof of release-signature compatibility, verified App Links, push delivery or real-device acceptance.
 
 ## Coursework evidence boundary
 

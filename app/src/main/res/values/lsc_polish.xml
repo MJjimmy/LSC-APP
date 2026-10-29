@@ -1,0 +1,10 @@
+<resources>
+    <string name="lsc_safe_home">Return to Welcome</string>
+    <string name="lsc_share_invitation">Share invitation</string>
+    <string name="lsc_leave_title">Leave this page?</string>
+    <string name="lsc_leave_message">Unfinished edits or file operations may be lost.</string>
+    <string name="lsc_leave_action">Continue</string>
+
+    <string name="lsc_page_blocked">This page could not be opened safely. Return to Welcome and try again.</string>
+    <string name="lsc_no_share_app">No app is available to share this invitation.</string>
+</resources>

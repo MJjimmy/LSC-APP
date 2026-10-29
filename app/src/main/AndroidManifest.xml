@@ -9,8 +9,8 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
         android:label="LSC"
-        android:icon="@drawable/lsc_launcher"
-        android:roundIcon="@drawable/lsc_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.LSC.Native"
         android:usesCleartextTraffic="false">
@@ -19,6 +19,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:theme="@style/Theme.LSC.Launch"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
@@ -31,6 +32,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="lscapp" android:host="auth" />
+            </intent-filter>
+
+            <!-- Website fallback remains available until the host publishes assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="lsc.up.railway.app" android:path="/invite.php" />
             </intent-filter>
 
         </activity>

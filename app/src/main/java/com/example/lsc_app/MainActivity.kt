@@ -3,6 +3,8 @@ package com.example.lsc_app
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.app.AlertDialog
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -11,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.view.ContextMenu
+import android.view.WindowInsetsController
 import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.view.animation.DecelerateInterpolator
@@ -24,6 +28,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
 import android.widget.Toast
+
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 
@@ -39,9 +44,14 @@ class MainActivity : Activity() {
     private var loadFailed = false
     private var restoringInitialPage = false
     private var resetHistoryOnFinish = false
+    private var googleSignInInProgress = false
+    private var committedPage: String? = null
+    private var fileOperationActive = false
+
     private var lastPage = AppRoutes.authUrl(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_LSC_Native)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         webView = findViewById(R.id.lscWebView)
@@ -49,6 +59,7 @@ class MainActivity : Activity() {
         appScreen = findViewById(R.id.appScreen)
         pageError = findViewById(R.id.pageError)
         errorMessage = findViewById(R.id.pageErrorMessage)
+
         applySystemInsets()
         configureWebView()
         fileActions.restoreState(savedInstanceState)
@@ -64,8 +75,11 @@ class MainActivity : Activity() {
         }
         findViewById<View>(R.id.retryButton).setOnClickListener {
             pageError.visibility = View.GONE
+            lastPage = AppNavigation.retryUrl(lastPage)
             webView.loadUrl(lastPage)
         }
+        findViewById<View>(R.id.errorHomeButton).setOnClickListener { confirmLeaving { showWelcome(false) } }
+        registerForContextMenu(webView)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -73,13 +87,22 @@ class MainActivity : Activity() {
             )
         }
         if (handleBrowserReturn(intent.data)) return
+        if (handleInvitation(intent.data)) return
         if (savedInstanceState?.getBoolean(STATE_WEB) == true) {
             showApp()
             lastPage = savedInstanceState.getString(STATE_PAGE) ?: AppRoutes.authUrl(false)
             restoringInitialPage = true
-            if (webView.restoreState(savedInstanceState) == null) {
+            val restored = webView.restoreState(savedInstanceState)
+            val restoredUrl = restored?.currentItem?.url.orEmpty()
+            if (restored == null || !WebRequestPolicy.isMainFrameAllowed(restoredUrl) ||
+                AppNavigation.retryUrl(restoredUrl) != restoredUrl) {
                 restoringInitialPage = false
+                lastPage = AppNavigation.retryUrl(lastPage)
                 webView.loadUrl(lastPage)
+            } else {
+                lastPage = restored.currentItem!!.url
+                committedPage = lastPage
+                webView.visibility = View.VISIBLE
             }
         } else {
             // No website/index request is needed to display this screen, even offline.
@@ -90,18 +113,24 @@ class MainActivity : Activity() {
     override fun onNewIntent(newIntent: Intent) {
         super.onNewIntent(newIntent)
         intent = newIntent
-        handleBrowserReturn(newIntent.data)
+        if (!handleBrowserReturn(newIntent.data)) handleInvitation(newIntent.data)
     }
 
     private fun beginGoogleSignIn() {
+        if (googleSignInInProgress) return
+        googleSignInInProgress = true
         fileActions.cancelForAccountBoundary()
         val pending = AppAuthFlow.create(System.currentTimeMillis())
         val prefs = getSharedPreferences("lsc_pending_google", MODE_PRIVATE)
         prefs.edit().putString("state", pending.state).putString("verifier", pending.verifier)
             .putLong("created", pending.createdAtMs).apply()
+        // Stop the interrupted WebView before opening the browser. Back/cancel must
+        // reveal a native entry screen, not an error from the abandoned navigation.
+        showWelcome(false)
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppAuthFlow.browserUrl(pending))))
         } catch (_: ActivityNotFoundException) {
+            googleSignInInProgress = false
             prefs.edit().clear().apply()
             Toast.makeText(this, R.string.lsc_browser_missing, Toast.LENGTH_LONG).show()
         }
@@ -121,6 +150,7 @@ class MainActivity : Activity() {
         }
         fileActions.cancelForAccountBoundary()
         // Consume locally before posting; duplicate return intents must not replay a login.
+        googleSignInInProgress = false
         prefs.edit().clear().apply()
         intent.data = null
         cancelWelcomeAnimation()
@@ -129,6 +159,19 @@ class MainActivity : Activity() {
         lastPage = AppRoutes.authUrl(false)
         webView.postUrl(AppRoutes.BASE_URL + "/app-auth.php?action=exchange", body.toByteArray(Charsets.UTF_8))
         return true
+    }
+
+    private fun finishCancelledGoogleSignIn() {
+        val prefs = getSharedPreferences("lsc_pending_google", MODE_PRIVATE)
+        // A verified callback consumes this state before onResume. Remaining state
+        // means the user came back without completing Google (also after recreation).
+        if (!googleSignInInProgress && !prefs.contains("state")) return
+        googleSignInInProgress = false
+        prefs.edit().clear().apply()
+        intent.data = null
+        loadFailed = false
+        pageError.visibility = View.GONE
+        showWelcome(false)
     }
 
     private fun applySystemInsets() {
@@ -157,13 +200,20 @@ class MainActivity : Activity() {
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             javaScriptCanOpenWindowsAutomatically = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) isAlgorithmicDarkeningAllowed = false
         }
+        webView.setBackgroundColor(getColor(R.color.lsc_surface))
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
             setAcceptThirdPartyCookies(webView, false)
         }
         fileActions = WebFileActions(this, webView,
             lastNonConfigurationInstance as? DownloadSession ?: DownloadSession(cacheDir))
+        fileActions.onOperationStatus = { status ->
+            fileOperationActive = status != null
+            findViewById<TextView>(R.id.fileOperationMessage).text = status.orEmpty()
+            findViewById<View>(R.id.fileOperationStatus).visibility = if (status == null) View.GONE else View.VISIBLE
+        }
         webView.webChromeClient = fileActions.chromeClient
         webView.setDownloadListener { url, _, disposition, mime, length ->
             fileActions.download(url, disposition, mime, length)
@@ -210,19 +260,24 @@ class MainActivity : Activity() {
                 if (!WebRequestPolicy.isMainFrameAllowed(url)) {
                     view.visibility = View.INVISIBLE
                     view.stopLoading()
-                    showPageError(R.string.lsc_connection_message)
-                } else if (!loadFailed) view.visibility = View.VISIBLE
+                    showPageError(R.string.lsc_page_blocked)
+                } else if (!loadFailed && url == lastPage) {
+                    committedPage = url
+                    view.visibility = View.VISIBLE
+                }
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                // Hide the preceding document until a trusted main-frame commit is visible.
-                view.visibility = View.INVISIBLE
+                // Refresh retains only the exact trusted committed document; other pages
+                // stay hidden until their own trusted commit. Independent redirect guards remain.
+                view.visibility = if (!loadFailed && AppNavigation.canKeepVisible(committedPage, url))
+                    View.VISIBLE else View.INVISIBLE
                 if (!restoringInitialPage || url != lastPage) fileActions.cancelForAccountBoundary()
                 restoringInitialPage = false
                 if (!WebRequestPolicy.isMainFrameAllowed(url)) {
                     view.visibility = View.INVISIBLE
                     view.stopLoading()
-                    showPageError(R.string.lsc_connection_message)
+                    showPageError(R.string.lsc_page_blocked)
                     return
                 }
                 if (!showingWeb) return
@@ -245,8 +300,9 @@ class MainActivity : Activity() {
                 }
                 fileActions.checkSessionCookie()
                 if (!showingWeb || AppRoutes.isLandingPage(url)) return
-                if (!loadFailed && view.url == url) view.visibility = View.VISIBLE
-                if (resetHistoryOnFinish && !loadFailed && view.url == url) {
+
+                if (!loadFailed && view.url == url && url == lastPage) view.visibility = View.VISIBLE
+                if (resetHistoryOnFinish && !loadFailed && view.url == url && url == lastPage) {
                     // Do not navigate back into a previous account screen or the website index.
                     view.clearHistory()
                     resetHistoryOnFinish = false
@@ -255,21 +311,87 @@ class MainActivity : Activity() {
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) showPageError(R.string.lsc_connection_message)
+                if (AppNavigation.shouldShowError(request.url.toString(), lastPage, request.isForMainFrame))
+                    showPageError(R.string.lsc_connection_message)
             }
 
             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                if (request.isForMainFrame && response.statusCode >= 500) showPageError(R.string.lsc_connection_message)
+                if (response.statusCode >= 500 &&
+                    AppNavigation.shouldShowError(request.url.toString(), lastPage, request.isForMainFrame))
+                    showPageError(R.string.lsc_connection_message)
             }
 
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 handler.cancel()
-                if (error.url == view.url || error.url == lastPage) showPageError(R.string.lsc_tls_message)
+                if (AppNavigation.shouldShowError(error.url, lastPage, true)) showPageError(R.string.lsc_tls_message)
             }
         }
     }
 
     private fun isTrusted(uri: Uri): Boolean = WebRequestPolicy.isMainFrameAllowed(uri.toString())
+
+    private fun handleInvitation(uri: Uri?): Boolean {
+        val url = uri?.toString()?.let(AppNavigation::invitationLink) ?: return false
+        // A new user-selected invitation replaces only an unfinished browser attempt, never the session.
+        googleSignInInProgress = false
+        getSharedPreferences("lsc_pending_google", MODE_PRIVATE).edit().clear().apply()
+        fileActions.cancelForAccountBoundary()
+        cancelWelcomeAnimation()
+        showApp()
+        lastPage = url
+        resetHistoryOnFinish = true
+        intent.data = null
+        webView.loadUrl(url)
+        return true
+    }
+
+    @Suppress("DEPRECATION")
+    private fun updateSystemBars() {
+        val background = getColor(R.color.lsc_surface)
+        findViewById<View>(R.id.rootLayout).setBackgroundColor(background)
+        window.statusBarColor = background
+        // API 24/25 cannot draw dark navigation icons; keep a fixed contrast fallback.
+        window.navigationBarColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            background else getColor(R.color.lsc_navy)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(mask, mask)
+        } else {
+            var flags = window.decorView.systemUiVisibility
+            flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            window.decorView.systemUiVisibility = flags
+        }
+    }
+
+    private fun confirmLeaving(action: () -> Unit) {
+        if (!fileOperationActive) { action(); return }
+        AlertDialog.Builder(this).setTitle(R.string.lsc_leave_title).setMessage(R.string.lsc_leave_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.lsc_leave_action) { _, _ -> action() }.show()
+    }
+
+    override fun onCreateContextMenu(menu: ContextMenu, view: View, info: ContextMenu.ContextMenuInfo?) {
+        super.onCreateContextMenu(menu, view, info)
+        if (view != webView || !showingWeb || loadFailed || committedPage != webView.url) return
+        val hit = webView.hitTestResult ?: return
+        if (hit.type !in setOf(WebView.HitTestResult.SRC_ANCHOR_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)) return
+        val link = hit.extra ?: return
+        if (!AppNavigation.canShareInvitation(webView.url.orEmpty(), link)) return
+        menu.add(R.string.lsc_share_invitation).setOnMenuItemClickListener {
+            if (AppNavigation.canShareInvitation(webView.url.orEmpty(), link)) {
+                try {
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, link)
+                    }, getString(R.string.lsc_share_invitation)))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(this, R.string.lsc_no_share_app, Toast.LENGTH_LONG).show()
+                }
+            }
+            true
+        }
+    }
 
     private fun openAccountPage(register: Boolean) {
         fileActions.cancelForAccountBoundary()
@@ -283,14 +405,19 @@ class MainActivity : Activity() {
     private fun showApp() {
         showingWeb = true
         loadFailed = false
+        committedPage = null
+        webView.visibility = View.INVISIBLE
         welcomeScreen.visibility = View.GONE
         appScreen.visibility = View.VISIBLE
         pageError.visibility = View.GONE
+        updateSystemBars()
     }
 
     private fun showWelcome(animate: Boolean) {
         fileActions.cancelForAccountBoundary()
         showingWeb = false
+        committedPage = null
+        updateSystemBars()
         webView.stopLoading()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
             .hideSoftInputFromWindow(webView.windowToken, 0)
@@ -327,10 +454,20 @@ class MainActivity : Activity() {
     }
 
     private fun navigateBack() {
-        when {
-            !showingWeb -> finish()
-            webView.canGoBack() -> webView.goBack()
-            else -> showWelcome(true)
+        confirmLeaving {
+            if (!showingWeb) {
+                finish()
+            } else {
+                val list = webView.copyBackForwardList()
+                val before = (0 until list.currentIndex).map { list.getItemAtIndex(it).url }
+                val offset = AppNavigation.backOffset(lastPage, before)
+                when {
+                    offset != null -> webView.goBackOrForward(offset)
+                    AppNavigation.destination(lastPage) == AppNavigation.Destination.AUTH || loadFailed ||
+                        AppNavigation.destination(lastPage) == AppNavigation.Destination.HELP -> showWelcome(false)
+                    else -> finish()
+                }
+            }
         }
     }
 
@@ -353,6 +490,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        finishCancelledGoogleSignIn()
         webView.onResume()
         fileActions.checkSessionCookie()
     }

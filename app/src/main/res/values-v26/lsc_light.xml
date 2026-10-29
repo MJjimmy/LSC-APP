@@ -1,0 +1,6 @@
+<resources>
+    <color name="lsc_legacy_navigation_bar">@color/lsc_surface</color>
+    <style name="Base.LSC.Platform" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

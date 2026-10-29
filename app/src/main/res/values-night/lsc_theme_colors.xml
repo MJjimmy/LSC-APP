@@ -1,0 +1,3 @@
+<resources>
+    <!-- Deliberately inherit the day palette and light native theme in night mode. -->
+</resources>
