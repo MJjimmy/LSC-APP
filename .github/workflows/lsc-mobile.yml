@@ -1,0 +1,110 @@
+name: LSC Mobile Build
+
+on:
+  push:
+    branches: [master, ui-fix]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lsc-mobile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Check project
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact source without stored credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify the existing Android toolchain
+        uses: ./.github/actions/android-tools
+
+  tests:
+    name: Run unit tests
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact source without stored credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify the existing Android toolchain
+        uses: ./.github/actions/android-tools
+      - name: Execute the existing unit test suite
+        shell: bash
+        run: bash ./gradlew --no-daemon --console=plain --max-workers=2 :app:testDebugUnitTest
+      - name: Require real, nonempty passing test results
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          files = sorted(Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          assert files, 'No JUnit results were produced'
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          for path in files:
+              suite = ET.parse(path).getroot()
+              assert suite.tag == 'testsuite', 'Unexpected aggregate report'
+              for key in totals:
+                  totals[key] += int(suite.attrib.get(key, '0'))
+          assert totals['tests'] > 0 and not any(totals[key] for key in ('failures', 'errors', 'skipped')), totals
+          print(json.dumps(dict(suites=len(files), **totals)))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## LSC unit tests\n```json\n' + json.dumps(dict(suites=len(files), **totals), indent=2) + '\n```\n')
+          PY
+      - name: Gate safety proof - deliberate failure on the review branch only
+        if: github.ref == 'refs/heads/ui-fix'
+        shell: bash
+        run: |
+          echo 'EXPECTED REVIEW-ONLY FAILURE: prove APK build and publishing are blocked. Removed before promotion.'
+          exit 1
+      - name: Preserve test reports even when tests fail
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: LSC-unit-test-results
+          path: |
+            app/build/test-results/testDebugUnitTest/*.xml
+            app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
+
+  build:
+    name: Build and publish APK
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact source without stored credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify the existing Android toolchain
+        uses: ./.github/actions/android-tools
+      - name: Build the debug APK only after unit tests pass
+        shell: bash
+        run: bash ./gradlew --no-daemon --console=plain --max-workers=2 :app:assembleDebug
+      - name: Verify a signed debug APK was actually built
+        shell: bash
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/37.0.0/aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish the completed debug APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: LSC-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

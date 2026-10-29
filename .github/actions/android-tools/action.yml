@@ -1,0 +1,34 @@
+name: LSC Android tools
+description: Verify the existing wrapper and select preinstalled Java and Android SDK without installers.
+runs:
+  using: composite
+  steps:
+    - name: Verify the official wrapper and pinned Gradle distribution before execution
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import hashlib
+        from pathlib import Path
+        jar = Path('gradle/wrapper/gradle-wrapper.jar')
+        expected = '3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98'
+        assert hashlib.sha256(jar.read_bytes()).hexdigest() == expected, 'Unexpected Gradle wrapper JAR'
+        properties = Path('gradle/wrapper/gradle-wrapper.properties').read_text()
+        assert 'distributionSha256Sum=dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f' in properties
+        assert 'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.8.1-bin.zip' in properties
+        assert 'validateDistributionUrl=true' in properties
+        print('Official wrapper and pinned distribution checksum verified.')
+        PY
+    - name: Select the runner's existing Java 25
+      shell: bash
+      run: |
+        test -n "$JAVA_HOME_25_X64"
+        test -x "$JAVA_HOME_25_X64/bin/java"
+        printf 'JAVA_HOME=%s\n' "$JAVA_HOME_25_X64" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$JAVA_HOME_25_X64" >> "$GITHUB_PATH"
+        "$JAVA_HOME_25_X64/bin/java" -version
+    - name: Check the runner's existing Android SDK
+      shell: bash
+      run: |
+        test -d "$ANDROID_HOME"
+        test -d "$ANDROID_HOME/build-tools/37.0.0"
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list_installed
