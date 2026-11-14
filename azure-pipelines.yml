@@ -1,0 +1,50 @@
+trigger:
+  branches:
+    include:
+      - master
+      - main
+      - ui-fix
+
+pr:
+  branches:
+    include:
+      - master
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+
+  - script: |
+      if [ -n "$JAVA_HOME_25_X64" ] && [ -x "$JAVA_HOME_25_X64/bin/java" ]; then
+        echo "##vso[task.setvariable variable=JAVA_HOME]$JAVA_HOME_25_X64"
+        echo "##vso[task.prependpath]$JAVA_HOME_25_X64/bin"
+      elif [ -n "$JAVA_HOME_21_X64" ] && [ -x "$JAVA_HOME_21_X64/bin/java" ]; then
+        echo "##vso[task.setvariable variable=JAVA_HOME]$JAVA_HOME_21_X64"
+        echo "##vso[task.prependpath]$JAVA_HOME_21_X64/bin"
+      fi
+      java -version
+    displayName: "Configure Java for Gradle 9.8.1"
+
+  - script: |
+      chmod +x ./gradlew
+      ./gradlew :app:testDebugUnitTest :app:assembleDebug
+    displayName: "Run Android Unit Tests and Build Debug APK"
+
+  - task: PublishTestResults@2
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: '**/TEST-*.xml'
+      failTaskOnFailedTests: true
+    condition: succeededOrFailed()
+    displayName: "Publish JUnit Test Results"
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: 'app/build/outputs/apk/debug'
+      ArtifactName: 'LSC-Android-Debug'
+      publishLocation: 'Container'
+    condition: succeeded()
+    displayName: "Publish Android Debug APK"
